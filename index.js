@@ -6,6 +6,7 @@ const fs = fs_sync.promises;
 const parse = require("csv-parse/lib/sync");
 const stringify = require("csv-stringify");
 const fetch = require("node-fetch");
+const path = require("path");
 require("dotenv").config();
 
 const API_TOKEN = process.env.OKTA_API_TOKEN;
@@ -15,11 +16,12 @@ app = express();
 
 // 일반적인 cron 스케줄 표시 매일 새벽 1시에 동작
 // 테스트하려면 30 * * * * *로 교체 (매분 30초가 되면 동작)
-cron.schedule("0 1 * * *", async () => {
+cron.schedule("0 * * * * *", async () => {
   try {
     // Read CSV and convert to JSON to include in 'arr' array for further work
     let arr = [];
     await (async function () {
+      const normalPath = path.normalize(__dirname + "/data/membersUntil.csv");
       const fileContent = await fs.readFile(
         __dirname + "/data/membersUntil.csv"
       );
@@ -54,9 +56,10 @@ cron.schedule("0 1 * * *", async () => {
           "Starting the daily automation process: " + now.format("YYYY-MM-DD")
         );
       }
-      console.log(currentUser.memberUntil);
+      const normalizedMemberUntil = moment(new Date(currentUser.memberUntil));
+      console.log(normalizedMemberUntil);
       // 권한 기간 만료 판단
-      const isExpired = moment(currentUser.memberUntil).isBefore(now, "day");
+      const isExpired = moment(normalizedMemberUntil).isBefore(now, "day");
       console.log(isExpired);
       // 권한 기간이 만료된 경우, 해당 유저의 userId, 그룹의 groupId 확인 후 유저를 그룹에서 삭제
       if (isExpired) {
@@ -124,8 +127,9 @@ cron.schedule("0 1 * * *", async () => {
         // TODO: overwrite schedule.csv (use remaining array to convert JSON to CSV)
         if (completed.length !== 0) {
           // 그룹에서 빠져나간 사용자가 있을 경우에는, 일일 로그 파일 생성
-          const filePath =
+          const filePath_raw =
             "./logs/membersExcluded-" + now.format("YYYY-MM-DD") + ".csv";
+          const filePath = path.normalize(filePath_raw);
           fs_sync.closeSync(fs_sync.openSync(filePath, "w"));
         }
 
@@ -138,7 +142,10 @@ cron.schedule("0 1 * * *", async () => {
             if (err) {
               console.log("remaining members overwrite error");
             }
-            fs.writeFile(__dirname + "/data/membersUntil.csv", output);
+            const normalPath = path.normalize(
+              __dirname + "/data/membersUntil.csv"
+            );
+            fs.writeFile(normalPath, output);
           }
         );
 
@@ -151,13 +158,13 @@ cron.schedule("0 1 * * *", async () => {
             if (err) {
               console.log("completed file write error");
             }
-            fs.writeFile(
+            const normalPath = path.normalize(
               __dirname +
                 "/logs/membersExcluded-" +
                 now.format("YYYY-MM-DD") +
-                ".csv",
-              output
+                ".csv"
             );
+            fs.writeFile(normalPath, output);
           }
         );
         console.log(
