@@ -16,15 +16,13 @@ app = express();
 
 // 일반적인 cron 스케줄 표시 매일 새벽 1시에 동작
 // 테스트하려면 0 * * * * *로 교체 (매분 0초가 되면 동작)
-cron.schedule("0 1 * * *", async () => {
+cron.schedule("0 * * * * *", async () => {
   try {
     // Read CSV and convert to JSON to include in 'arr' array for further work
     let arr = [];
     await (async function () {
       const normalPath = path.normalize(__dirname + "/data/membersUntil.csv");
-      const fileContent = await fs.readFile(
-        __dirname + "/data/membersUntil.csv"
-      );
+      const fileContent = await fs.readFile(normalPath);
       arr = parse(fileContent, { columns: true }, (err) => {
         if (err) {
           console.log("Error in reading .csv file!");
@@ -53,14 +51,15 @@ cron.schedule("0 1 * * *", async () => {
       if (idx === 0) {
         // 전처리 내용
         console.log(
+          "\x1b[36m%s\x1b[0m",
           "Starting the daily automation process: " + now.format("YYYY-MM-DD")
         );
       }
       const normalizedMemberUntil = moment(new Date(currentUser.memberUntil));
-      console.log(normalizedMemberUntil);
+      // console.log(normalizedMemberUntil);
       // 권한 기간 만료 판단
       const isExpired = moment(normalizedMemberUntil).isBefore(now, "day");
-      console.log(isExpired);
+      // console.log(isExpired);
       // 권한 기간이 만료된 경우, 해당 유저의 userId, 그룹의 groupId 확인 후 유저를 그룹에서 삭제
       if (isExpired) {
         // 리퀘스트 헤더 세팅
@@ -113,12 +112,17 @@ cron.schedule("0 1 * * *", async () => {
             ".csv"
         );
       } else {
+        // 해당 유저의 그룹 권한 기간이 아직 남아 있을 경우,
         // put this user to remaining array
         // log the result to console
         remaining.push(currentUser);
         console.log(
           userName +
-            " awaits the next automation. The user will remain in membersUntil.csv"
+            " has the membership to " +
+            currentUser.groupName +
+            " group until " +
+            normalizedMemberUntil.format("YYYY-MM-DD") +
+            ". The user will remain in membersUntil.csv."
         );
       }
       idx += 1;
@@ -131,6 +135,20 @@ cron.schedule("0 1 * * *", async () => {
             "./logs/membersExcluded-" + now.format("YYYY-MM-DD") + ".csv";
           const filePath = path.normalize(filePath_raw);
           fs_sync.closeSync(fs_sync.openSync(filePath, "w"));
+        }
+
+        // 멤버십 제외 대상자가 없어서 API 콜이 하나도 나가지 않았을 경우, Token expire를 방지하기 위해 domain 확인 API 콜 1회 요청
+        // token expiration date 리셋됨
+        if (completed.length === 0) {
+          let headers = {
+            "Content-Type": "application/json",
+            Authorization: `SSWS ${API_TOKEN}`,
+          };
+          // GET userId
+          await fetch(baseurl + `/api/v1/domains`, {
+            method: "get",
+            headers,
+          });
         }
 
         stringify(
@@ -168,6 +186,7 @@ cron.schedule("0 1 * * *", async () => {
           }
         );
         console.log(
+          "\x1b[36m%s\x1b[0m",
           "Closing the daily automation process: " + now.format("YYYY-MM-DD")
         );
 
