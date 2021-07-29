@@ -15,8 +15,8 @@ const baseurl = process.env.BASE_URL;
 app = express();
 
 // 일반적인 cron 스케줄 표시 매일 새벽 1시에 동작
-// 테스트하려면 30 * * * * *로 교체 (매분 30초가 되면 동작)
-cron.schedule("0 * * * * *", async () => {
+// 테스트하려면 0 * * * * *로 교체 (매분 0초가 되면 동작)
+cron.schedule("0 1 * * *", async () => {
   try {
     // Read CSV and convert to JSON to include in 'arr' array for further work
     let arr = [];
